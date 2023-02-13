@@ -523,7 +523,6 @@ class BaseTrainer:
                     check_file(resume) if isinstance(resume, (str,
                                                               Path)) and Path(resume).exists() else get_latest_run())
                 self.args = get_cfg(attempt_load_weights(last).args)
-                self.args.weight_decay /= 2
                 self.args.model, resume = str(last), True  # reinstate
             except Exception as e:
                 raise FileNotFoundError("Resume checkpoint not found. Please pass a valid checkpoint to resume from, "
