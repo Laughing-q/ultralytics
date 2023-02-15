@@ -82,6 +82,7 @@ class BaseTrainer:
         self.args = get_cfg(cfg, overrides)
         self.device = select_device(self.args.device, self.args.batch)
         self.check_resume()
+        self.args = get_cfg(self.args, overrides)  # update args for resume
         self.console = LOGGER
         self.validator = None
         self.model = None
@@ -392,6 +393,8 @@ class BaseTrainer:
         torch.save(ckpt, self.last)
         if self.best_fitness == self.fitness:
             torch.save(ckpt, self.best)
+        if (self.epoch + 1) == 450:
+            torch.save(ckpt, self.wdir / f'epoch{self.epoch}.pt')
         del ckpt
 
     def get_dataset(self, data):
