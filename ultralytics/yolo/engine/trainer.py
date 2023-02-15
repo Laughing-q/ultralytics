@@ -393,7 +393,7 @@ class BaseTrainer:
         if self.best_fitness == self.fitness:
             torch.save(ckpt, self.best)
         if (self.epoch + 1) == 450:
-            torch.save(ckpt, self.wdir / f'epoch{self.epoch}.pt')
+            torch.save(ckpt, self.wdir / f'epoch{self.epoch + 1}.pt')
         del ckpt
 
     def get_dataset(self, data):
