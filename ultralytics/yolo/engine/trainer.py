@@ -81,7 +81,7 @@ class BaseTrainer:
         """
         self.args = get_cfg(cfg, overrides)
         self.device = select_device(self.args.device, self.args.batch)
-        self.check_resume(overrides)
+        self.check_resume()
         self.console = LOGGER
         self.validator = None
         self.model = None
@@ -521,15 +521,16 @@ class BaseTrainer:
                     self.metrics.pop('fitness', None)
                     self.run_callbacks('on_fit_epoch_end')
 
-    def check_resume(self, overrides):
+    def check_resume(self):
         resume = self.args.resume
         if resume:
             try:
                 last = Path(
                     check_file(resume) if isinstance(resume, (str,
                                                               Path)) and Path(resume).exists() else get_latest_run())
-                self.args = get_cfg(attempt_load_weights(last).args, overrides)
+                self.args = get_cfg(attempt_load_weights(last).args)
                 self.args.model, resume = str(last), True  # reinstate
+                self.args.close_mosaic = 20
             except Exception as e:
                 raise FileNotFoundError("Resume checkpoint not found. Please pass a valid checkpoint to resume from, "
                                         "i.e. 'yolo train resume model=path/to/last.pt'") from e
