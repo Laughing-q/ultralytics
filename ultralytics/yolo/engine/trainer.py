@@ -81,8 +81,7 @@ class BaseTrainer:
         """
         self.args = get_cfg(cfg, overrides)
         self.device = select_device(self.args.device, self.args.batch)
-        self.check_resume()
-        self.args = get_cfg(self.args, overrides)  # update args for resume
+        self.check_resume(overrides)
         self.console = LOGGER
         self.validator = None
         self.model = None
@@ -518,14 +517,14 @@ class BaseTrainer:
                     self.metrics.pop('fitness', None)
                     self.run_callbacks('on_fit_epoch_end')
 
-    def check_resume(self):
+    def check_resume(self, overrides):
         resume = self.args.resume
         if resume:
             try:
                 last = Path(
                     check_file(resume) if isinstance(resume, (str,
                                                               Path)) and Path(resume).exists() else get_latest_run())
-                self.args = get_cfg(attempt_load_weights(last).args)
+                self.args = get_cfg(attempt_load_weights(last).args, overrides)
                 self.args.model, resume = str(last), True  # reinstate
             except Exception as e:
                 raise FileNotFoundError("Resume checkpoint not found. Please pass a valid checkpoint to resume from, "
