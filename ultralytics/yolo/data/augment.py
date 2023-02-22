@@ -209,6 +209,7 @@ class RandomPerspective:
                  shear=0.0,
                  perspective=0.0,
                  border=(0, 0),
+                 area_thr=None,
                  pre_transform=None):
         self.degrees = degrees
         self.translate = translate
@@ -217,6 +218,7 @@ class RandomPerspective:
         self.perspective = perspective
         # mosaic border
         self.border = border
+        self.area_thr = area_thr
         self.pre_transform = pre_transform
 
     def affine_transform(self, img, border):
@@ -374,7 +376,7 @@ class RandomPerspective:
         # make the bboxes have the same scale with new_bboxes
         i = self.box_candidates(box1=instances.bboxes.T,
                                 box2=new_instances.bboxes.T,
-                                area_thr=0.01 if len(segments) else 0.10)
+                                area_thr=self.area_thr if self.area_thr else 0.01 if len(segments) else 0.10)
         labels['instances'] = new_instances[i]
         labels['cls'] = cls[i]
         labels['img'] = img
