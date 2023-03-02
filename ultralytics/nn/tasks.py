@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from ultralytics.nn.modules import (C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x, Classify,
                                     Concat, Conv, ConvTranspose, Detect, DWConv, DWConvTranspose2d, Ensemble, Focus,
-                                    GhostBottleneck, GhostConv, Segment)
+                                    GhostBottleneck, GhostConv, Keypoint, Segment)
 from ultralytics.yolo.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, RANK, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_requirements, check_yaml
 from ultralytics.yolo.utils.torch_utils import (fuse_conv_and_bn, fuse_deconv_and_bn, initialize_weights,
@@ -164,7 +164,12 @@ class BaseModel(nn.Module):
 
 class DetectionModel(BaseModel):
     # YOLOv8 detection model
-    def __init__(self, cfg='yolov8n.yaml', ch=3, nc=None, verbose=True):  # model, input channels, number of classes
+    def __init__(self,
+                 cfg='yolov8n.yaml',
+                 ch=3,
+                 nc=None,
+                 nkpt=None,
+                 verbose=True):  # model, input channels, number of classes
         super().__init__()
         self.yaml = cfg if isinstance(cfg, dict) else yaml_load(check_yaml(cfg), append_filename=True)  # cfg dict
 
@@ -173,13 +178,16 @@ class DetectionModel(BaseModel):
         if nc and nc != self.yaml['nc']:
             LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml['nc'] = nc  # override yaml value
+        if nkpt and nkpt != self.yaml['nkpt']:
+            LOGGER.info(f"Overriding model.yaml nkpt={self.yaml['nkpt']} with nkpt={nkpt}")
+            self.yaml['nkpt'] = nkpt
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
         self.names = {i: f'{i}' for i in range(self.yaml['nc'])}  # default names dict
         self.inplace = self.yaml.get('inplace', True)
 
         # Build strides
         m = self.model[-1]  # Detect()
-        if isinstance(m, (Detect, Segment)):
+        if isinstance(m, (Detect, Segment, Keypoint)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x)
@@ -249,6 +257,12 @@ class SegmentationModel(DetectionModel):
 
     def _forward_augment(self, x):
         raise NotImplementedError('WARNING ⚠️ SegmentationModel has not supported augment inference yet!')
+
+
+class KeypointModel(DetectionModel):
+
+    def __init__(self, cfg='yolov5s-kpt.yaml', ch=3, nc=None, nkpt=None, verbose=True):
+        super().__init__(cfg, ch, nc, nkpt, verbose)
 
 
 class ClassificationModel(BaseModel):
@@ -429,7 +443,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
     # Parse a YOLO model.yaml dictionary
     if verbose:
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
-    nc, gd, gw, act = d['nc'], d['depth_multiple'], d['width_multiple'], d.get('activation')
+    nc, gd, gw, act, nkpt = d['nc'], d['depth_multiple'], d['width_multiple'], d.get('activation'), d.get('nkpt')
     if act:
         Conv.default_act = eval(act)  # redefine default activation, i.e. Conv.default_act = nn.SiLU()
         if verbose:
@@ -459,7 +473,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in (Detect, Segment):
+        elif m in {Detect, Segment, Keypoint}:
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(args[2] * gw, 8)
@@ -497,12 +511,14 @@ def guess_model_task(model):
     def cfg2task(cfg):
         # Guess from YAML dictionary
         m = cfg['head'][-1][-2].lower()  # output module name
-        if m in ('classify', 'classifier', 'cls', 'fc'):
+        if m in ['classify', 'classifier', 'cls', 'fc']:
             return 'classify'
-        if m == 'detect':
+        if m in ['detect']:
             return 'detect'
-        if m == 'segment':
+        if m in ['segment']:
             return 'segment'
+        if m in ['keypoint']:
+            return 'keypoint'
 
     # Guess from model cfg
     if isinstance(model, dict):
@@ -517,6 +533,8 @@ def guess_model_task(model):
         for x in 'model.yaml', 'model.model.yaml', 'model.model.model.yaml':
             with contextlib.suppress(Exception):
                 return cfg2task(eval(x))
+        if m in ['keypoint']:
+            return 'keypoint'
 
         for m in model.modules():
             if isinstance(m, Detect):
@@ -525,6 +543,8 @@ def guess_model_task(model):
                 return 'segment'
             elif isinstance(m, Classify):
                 return 'classify'
+            elif isinstance(m, Keypoint):
+                return 'keypoint'
 
     # Guess from model filename
     if isinstance(model, (str, Path)):

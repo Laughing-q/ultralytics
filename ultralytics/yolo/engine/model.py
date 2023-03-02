@@ -23,8 +23,12 @@ TASK_MAP = {
         DetectionModel, yolo.v8.detect.DetectionTrainer, yolo.v8.detect.DetectionValidator,
         yolo.v8.detect.DetectionPredictor],
     'segment': [
-        SegmentationModel, yolo.v8.segment.SegmentationTrainer, yolo.v8.segment.SegmentationValidator,
-        yolo.v8.segment.SegmentationPredictor]}
+        SegmentationModel, 'yolo.TYPE.segment.SegmentationTrainer', 'yolo.TYPE.segment.SegmentationValidator',
+        'yolo.TYPE.segment.SegmentationPredictor'],
+    'keypoint': [
+        DetectionModel, 'yolo.TYPE.detect.DetectionTrainer', 'yolo.TYPE.detect.DetectionValidator',
+        'yolo.TYPE.detect.DetectionPredictor']  # temp untill keypoint modes are not  implemented
+}
 
 
 class YOLO:
