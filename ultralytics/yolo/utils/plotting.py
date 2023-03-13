@@ -8,8 +8,6 @@ import cv2
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import seaborn as sn
 import torch
 from PIL import Image, ImageDraw, ImageFont
 from PIL import __version__ as pil_version
@@ -32,6 +30,11 @@ class Colors:
                 '2C99A8', '00C2FF', '344593', '6473FF', '0018EC', '8438FF', '520085', 'CB38FF', 'FF95C8', 'FF37C7')
         self.palette = [self.hex2rgb(f'#{c}') for c in hexs]
         self.n = len(self.palette)
+        self.pose_palette = np.array([[255, 128, 0], [255, 153, 51], [255, 178, 102], [230, 230, 0], [255, 153, 255],
+                                      [153, 204, 255], [255, 102, 255], [255, 51, 255], [102, 178, 255], [51, 153, 255],
+                                      [255, 153, 153], [255, 102, 102], [255, 51, 51], [153, 255, 153], [102, 255, 102],
+                                      [51, 255, 51], [0, 255, 0], [0, 0, 255], [255, 0, 0], [255, 255, 255]],
+                                     dtype=np.uint8)
 
     def __call__(self, i, bgr=False):
         c = self.palette[int(i) % self.n]
@@ -64,6 +67,12 @@ class Annotator:
         else:  # use cv2
             self.im = im
         self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
+        # pose
+        self.skeleton = [[16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12], [7, 13], [6, 7], [6, 8], [7, 9],
+                         [8, 10], [9, 11], [2, 3], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7]]
+
+        self.limb_color = colors.pose_palette[[9, 9, 9, 9, 7, 7, 7, 0, 0, 0, 0, 0, 16, 16, 16, 16, 16, 16, 16]]
+        self.kpt_color = colors.pose_palette[[16, 16, 16, 16, 16, 0, 0, 0, 0, 0, 0, 9, 9, 9, 9, 9, 9]]
 
     def box_label(self, box, label='', color=(128, 128, 128), txt_color=(255, 255, 255)):
         # Add one xyxy box to image with label
@@ -134,6 +143,45 @@ class Annotator:
             # convert im back to PIL and update draw
             self.fromarray(self.im)
 
+    def kpts(self, kpts, shape=(640, 640), steps=3, radius=5, kpt_line=True):
+        """Plot keypoints.
+        Args:
+            kpts (tensor): predicted kpts, shape: [51]
+            shape (tuple): image shape, (h, w)
+            steps (int): keypoints step
+            radius (int): size of drawing points
+        """
+        if self.pil:
+            # convert to numpy first
+            self.im = np.asarray(self.im).copy()
+        num_kpts = len(kpts) // steps
+        for kid in range(num_kpts):
+            x_coord, y_coord = kpts[steps * kid], kpts[steps * kid + 1]
+            if x_coord % shape[1] != 0 and y_coord % shape[0] != 0:
+                if steps == 3:
+                    conf = kpts[steps * kid + 2]
+                    if conf < 0.5:
+                        continue
+                cv2.circle(self.im, (int(x_coord), int(y_coord)), radius, [int(x) for x in self.kpt_color[kid]], -1)
+
+        for sk_id, sk in enumerate(self.skeleton):
+            pos1 = (int(kpts[(sk[0] - 1) * steps]), int(kpts[(sk[0] - 1) * steps + 1]))
+            pos2 = (int(kpts[(sk[1] - 1) * steps]), int(kpts[(sk[1] - 1) * steps + 1]))
+            if steps == 3:
+                conf1 = kpts[(sk[0] - 1) * steps + 2]
+                conf2 = kpts[(sk[1] - 1) * steps + 2]
+                if conf1 < 0.5 or conf2 < 0.5:
+                    continue
+            if pos1[0] % shape[1] == 0 or pos1[1] % shape[0] == 0 or pos1[0] < 0 or pos1[1] < 0:
+                continue
+            if pos2[0] % shape[1] == 0 or pos2[1] % shape[0] == 0 or pos2[0] < 0 or pos2[1] < 0:
+                continue
+            if kpt_line:
+                cv2.line(self.im, pos1, pos2, [int(x) for x in self.limb_color[sk_id]], thickness=2)
+        if self.pil:
+            # convert im back to PIL and update draw
+            self.fromarray(self.im)
+
     def rectangle(self, xy, fill=None, outline=None, width=1):
         # Add rectangle to image (PIL-only)
         self.draw.rectangle(xy, fill, outline, width)
@@ -161,6 +209,9 @@ class Annotator:
 
 @TryExcept()  # known issue https://github.com/ultralytics/yolov5/issues/5395
 def plot_labels(boxes, cls, names=(), save_dir=Path('')):
+    import pandas as pd
+    import seaborn as sn
+
     # plot dataset labels
     LOGGER.info(f"Plotting labels to {save_dir / 'labels.jpg'}... ")
     b = boxes.transpose()  # classes, boxes
@@ -228,6 +279,7 @@ def plot_images(images,
                 cls,
                 bboxes,
                 masks=np.zeros(0, dtype=np.uint8),
+                kpts=np.zeros((0, 51), dtype=np.float32),
                 paths=None,
                 fname='images.jpg',
                 names=None):
@@ -240,6 +292,8 @@ def plot_images(images,
         bboxes = bboxes.cpu().numpy()
     if isinstance(masks, torch.Tensor):
         masks = masks.cpu().numpy().astype(int)
+    if isinstance(kpts, torch.Tensor):
+        kpts = kpts.cpu().numpy()
     if isinstance(batch_idx, torch.Tensor):
         batch_idx = batch_idx.cpu().numpy()
 
@@ -274,7 +328,7 @@ def plot_images(images,
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         annotator.rectangle([x, y, x + w, y + h], None, (255, 255, 255), width=2)  # borders
         if paths:
-            annotator.text((x + 5, y + 5 + h), text=Path(paths[i]).name[:40], txt_color=(220, 220, 220))  # filenames
+            annotator.text((x + 5, y + 5), text=Path(paths[i]).name[:40], txt_color=(220, 220, 220))  # filenames
         if len(cls) > 0:
             idx = batch_idx == i
 
@@ -299,6 +353,21 @@ def plot_images(images,
                     label = f'{c}' if labels else f'{c} {conf[j]:.1f}'
                     annotator.box_label(box, label, color=color)
 
+            # Plot keypoints
+            if len(kpts):
+                kpts_ = kpts[idx].copy()
+                if len(kpts_):
+                    if kpts_[:, 0::3].max() <= 1.01 or kpts_[:, 1::3].max() <= 1.01:  # if normalized with tolerance .01
+                        kpts_[:, 0::3] *= w  # scale to pixels
+                        kpts_[:, 1::3] *= h
+                    elif scale < 1:  # absolute coords need scale if image scales
+                        kpts_ *= scale
+                kpts_[:, 0::3] += x
+                kpts_[:, 1::3] += y
+                for j in range(len(kpts_)):
+                    if labels or conf[j] > 0.25:  # 0.25 conf thresh
+                        annotator.kpts(kpts_[j])
+
             # Plot masks
             if len(masks):
                 if idx.shape[0] == masks.shape[0]:  # overlap_masks=False
@@ -306,7 +375,7 @@ def plot_images(images,
                 else:  # overlap_masks=True
                     image_masks = masks[[i]]  # (1, 640, 640)
                     nl = idx.sum()
-                    index = np.arange(nl).reshape(nl, 1, 1) + 1
+                    index = np.arange(nl).reshape((nl, 1, 1)) + 1
                     image_masks = np.repeat(image_masks, nl, axis=0)
                     image_masks = np.where(image_masks == index, 1.0, 0.0)
 
@@ -327,12 +396,16 @@ def plot_images(images,
     annotator.im.save(fname)  # save
 
 
-def plot_results(file='path/to/results.csv', dir='', segment=False):
+def plot_results(file='path/to/results.csv', dir='', segment=False, pose=False):
     # Plot training results.csv. Usage: from utils.plots import *; plot_results('path/to/results.csv')
+    import pandas as pd
     save_dir = Path(file).parent if file else Path(dir)
     if segment:
         fig, ax = plt.subplots(2, 8, figsize=(18, 6), tight_layout=True)
         index = [1, 2, 3, 4, 5, 6, 9, 10, 13, 14, 15, 16, 7, 8, 11, 12]
+    elif pose:
+        fig, ax = plt.subplots(2, 9, figsize=(21, 6), tight_layout=True)
+        index = [1, 2, 3, 4, 5, 6, 7, 10, 11, 14, 15, 16, 17, 18, 8, 9, 12, 13]
     else:
         fig, ax = plt.subplots(2, 5, figsize=(12, 6), tight_layout=True)
         index = [1, 2, 3, 4, 5, 8, 9, 10, 6, 7]

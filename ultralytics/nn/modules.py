@@ -67,7 +67,8 @@ class ConvTranspose(nn.Module):
 
 
 class DFL(nn.Module):
-    # Integral module of Distribution Focal Loss (DFL) proposed in Generalized Focal Loss https://ieeexplore.ieee.org/document/9792391
+    # Integral module of Distribution Focal Loss (DFL)
+    # Proposed in Generalized Focal Loss https://ieeexplore.ieee.org/document/9792391
     def __init__(self, c1=16):
         super().__init__()
         self.conv = nn.Conv2d(c1, 1, 1, bias=False).requires_grad_(False)
@@ -377,31 +378,9 @@ class Ensemble(nn.ModuleList):
         return y, None  # inference, train output
 
 
-class ImplicitA(nn.Module):
-
-    def __init__(self, channel):
-        super().__init__()
-        self.channel = channel
-        self.implicit = nn.Parameter(torch.zeros(1, channel, 1, 1))
-        nn.init.normal_(self.implicit, std=.02)
-
-    def forward(self, x):
-        return self.implicit.expand_as(x) + x
+# Model heads below ----------------------------------------------------------------------------------------------------
 
 
-class ImplicitM(nn.Module):
-
-    def __init__(self, channel):
-        super().__init__()
-        self.channel = channel
-        self.implicit = nn.Parameter(torch.ones(1, channel, 1, 1))
-        nn.init.normal_(self.implicit, mean=1., std=.02)
-
-    def forward(self, x):
-        return self.implicit.expand_as(x) * x
-
-
-# heads
 class Detect(nn.Module):
     # YOLOv8 Detect head for detection models
     dynamic = False  # force grid reconstruction
@@ -414,7 +393,7 @@ class Detect(nn.Module):
         super().__init__()
         self.nc = nc  # number of classes
         self.nl = len(ch)  # number of detection layers
-        self.reg_max = 16  # DFL channels (ch[0] // 16`` to scale 4/8/12/16/20 for n/s/m/l/x)
+        self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
         self.no = nc + self.reg_max * 4  # number of outputs per anchor
         self.stride = torch.zeros(self.nl)  # strides computed during build
         c2, c3 = max((16, ch[0] // 4, self.reg_max * 4)), max(ch[0], self.nc)  # channels
@@ -476,6 +455,42 @@ class Segment(Detect):
         return (torch.cat([x, mc], 1), p) if self.export else (torch.cat([x[0], mc], 1), (x[1], mc, p))
 
 
+class Pose(Detect):
+    # YOLOv8 Pose head for keypoints models
+    def __init__(self, nc=80, nkpt=17, ch=()):
+        super().__init__(nc, ch)
+        self.nkpt = nkpt  # number of keypoints
+        self.no_kpt = self.nkpt * 3  # xy, cls(kpt)
+        self.detect = Detect.forward
+
+        c4 = max(ch[0] // 4, 32)  # NOTE: wanted to set c4 = max(ch[0] // 4, self.no_kpt) but `no_kpt` is an odd number
+        self.cv4 = nn.ModuleList(
+            nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.no_kpt, 1)) for x in ch)
+
+    def forward(self, x):
+        bs = x[0].shape[0]  # batch size
+        kpt = torch.cat([self.cv4[i](x[i]).view(bs, self.no_kpt, -1) for i in range(self.nl)],
+                        2)  # keypoints, (bs, 17*3, h*w)
+        x = self.detect(self, x)
+        if self.training:
+            return x, kpt
+        bbox = x[:, :4, :] if self.export else x[0][:, :4, :]
+        pred_kpt = self.kpts_decode(kpt, bbox)
+        return torch.cat([x, pred_kpt], 1) if self.export else (torch.cat([x[0], pred_kpt], 1), (x[1], kpt))
+
+    def kpts_decode(self, kpts, bbox=None):
+        # y = kpts.sigmoid()   # (bs, 51, h*w)
+        # y[:, 0::3, :] = (y[:, 0::3, :] - 0.5) * bbox[:, [2], :] + self.anchors[0] * self.strides
+        # y[:, 1::3, :] = (y[:, 1::3, :] - 0.5) * bbox[:, [3], :] + self.anchors[1] * self.strides
+        # y[:, 0::3, :] = (y[:, 0::3, :] - 0.5) * bbox[:, [2], :] + bbox[:, [0], :]
+        # y[:, 1::3, :] = (y[:, 1::3, :] - 0.5) * bbox[:, [3], :] + bbox[:, [1], :]
+        y = kpts.clone()
+        y[:, 2::3, :] = y[:, 2::3, :].sigmoid()
+        y[:, 0::3, :] = (y[:, 0::3, :] * 2 - 0.5 + self.anchors[0]) * self.strides
+        y[:, 1::3, :] = (y[:, 1::3, :] * 2 - 0.5 + self.anchors[1]) * self.strides
+        return y
+
+
 class Classify(nn.Module):
     # YOLOv8 classification head, i.e. x(b,c1,20,20) to x(b,c2)
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1):  # ch_in, ch_out, kernel, stride, padding, groups
@@ -491,50 +506,3 @@ class Classify(nn.Module):
             x = torch.cat(x, 1)
         x = self.linear(self.drop(self.pool(self.conv(x)).flatten(1)))
         return x if self.training else x.softmax(1)
-
-
-class Keypoint(Detect):
-
-    def __init__(self, nc=80, nkpt=None, ch=()):
-        super().__init__(nc, ch)
-        self.nkpt = nkpt  # number of keypoints
-        self.no_kpt = self.nkpt  # number of outputs per anchor for keypoints
-        self.no_det = nc + self.reg_max * 4  # number of outputs per anchor
-        self.no = self.no_det + self.no_kpt  # number of outputs per anchor
-        self.m = nn.ModuleList(nn.Conv2d(x, self.no_det, 1) for x in ch)  # output conv
-        self.detect = Detect.forward
-
-        if self.nkpt is not None:
-            self.m_kpt = nn.ModuleList(nn.Conv2d(x, self.no_kpt, 1) for x in ch)
-
-    def forward(self, head_features):
-        output = []  # inference output
-        for i in range(self.nl):
-            head_features[i] = torch.cat((self.m[i](head_features[i]), self.m_kpt[i](head_features[i])), axis=1)
-            bs, _, ny, nx = head_features[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
-            head_features[i] = head_features[i].view(bs, 1, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
-            x_det = head_features[i][..., :6]  # (obj, conf, x, y, w, h)
-            x_kpt = head_features[i][..., 6:]  # (kpt_i_x, kpt_i_y, kpt_i_conf)
-
-            if not self.training:  # inference
-                if self.dynamic or self.grid[i].shape[2:4] != head_features[i].shape[2:4]:
-                    self.grid[i], self.anchor_grid[i] = self._make_grid(nx, ny, i)
-
-                kpt_grid_x = self.grid[i][..., 0:1]
-                kpt_grid_y = self.grid[i][..., 1:2]
-
-                y = x_det.sigmoid()
-
-                xy = (y[..., 0:2] * 2 + self.grid[i]) * self.stride[i]  # xy
-                wh = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
-                if self.nkpt != 0:
-                    x_kpt[..., 0::3] = (x_kpt[..., ::3] * 2. +
-                                        kpt_grid_x.repeat(1, 1, 1, 1, self.nkpt)) * self.stride[i]  # xy
-                    x_kpt[..., 1::3] = (x_kpt[..., 1::3] * 2. +
-                                        kpt_grid_y.repeat(1, 1, 1, 1, self.nkpt)) * self.stride[i]  # xy
-
-                    x_kpt[..., 2::3] = x_kpt[..., 2::3].sigmoid()  # visibility confidence
-                y = torch.cat((xy, wh, y[..., 4:], x_kpt), -1)
-                output.append(y.view(bs, -1, self.no))
-        return head_features if self.training else (torch.cat(output, 1),) if self.export else (torch.cat(output, 1),
-                                                                                                head_features)

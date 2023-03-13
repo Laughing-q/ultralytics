@@ -49,6 +49,8 @@ def test_predict_dir():
 
 def test_predict_img():
     model = YOLO(MODEL)
+    seg_model = YOLO('yolov8n-seg.pt')
+    cls_model = YOLO('yolov8n-cls.pt')
     im = cv2.imread(str(SOURCE))
     assert len(model(source=Image.open(SOURCE), save=True, verbose=True)) == 1  # PIL
     assert len(model(source=im, save=True, save_txt=True)) == 1  # ndarray
@@ -63,6 +65,18 @@ def test_predict_img():
         Image.open(SOURCE),  # PIL
         np.zeros((320, 640, 3))]  # numpy
     assert len(model(batch)) == len(batch)  # multiple sources in a batch
+
+    # Test tensor inference
+    im = cv2.imread(str(SOURCE))  # OpenCV
+    t = cv2.resize(im, (32, 32))
+    t = torch.from_numpy(t.transpose((2, 0, 1)))
+    t = torch.stack([t, t, t, t])
+    results = model(t)
+    assert len(results) == t.shape[0]
+    results = seg_model(t)
+    assert len(results) == t.shape[0]
+    results = cls_model(t)
+    assert len(results) == t.shape[0]
 
 
 def test_predict_grey_and_4ch():
@@ -80,6 +94,13 @@ def test_val():
 def test_val_scratch():
     model = YOLO(CFG)
     model.val(data='coco8.yaml', imgsz=32)
+
+
+def test_amp():
+    if torch.cuda.is_available():
+        from ultralytics.yolo.engine.trainer import check_amp
+        model = YOLO(MODEL).model.cuda()
+        assert check_amp(model)
 
 
 def test_train_scratch():

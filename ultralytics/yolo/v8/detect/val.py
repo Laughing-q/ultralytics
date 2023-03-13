@@ -41,7 +41,7 @@ class DetectionValidator(BaseValidator):
 
     def init_metrics(self, model):
         val = self.data.get(self.args.split, '')  # validation path
-        self.is_coco = isinstance(val, str) and val.endswith(f'coco{os.sep}val2017.txt')  # is COCO dataset
+        self.is_coco = isinstance(val, str) and 'coco' in val and val.endswith(f'{os.sep}val2017.txt')  # is COCO
         self.class_map = ops.coco80_to_coco91_class() if self.is_coco else list(range(1000))
         self.args.save_json |= self.is_coco and not self.training  # run on final val if training COCO
         self.names = model.names
@@ -113,6 +113,7 @@ class DetectionValidator(BaseValidator):
 
     def finalize_metrics(self, *args, **kwargs):
         self.metrics.speed = self.speed
+        self.metrics.confusion_matrix = self.confusion_matrix
 
     def get_stats(self):
         stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]  # to numpy

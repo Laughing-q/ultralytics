@@ -61,8 +61,18 @@ CFG_BOOL_KEYS = ('save', 'exist_ok', 'pretrained', 'verbose', 'deterministic', '
                  'v5loader')
 
 # Define valid tasks and modes
-TASKS = 'detect', 'segment', 'classify'
 MODES = 'train', 'val', 'predict', 'export', 'track', 'benchmark'
+TASKS = 'detect', 'segment', 'classify', 'pose'
+TASK2DATA = {
+    'detect': 'coco128.yaml',
+    'segment': 'coco128-seg.yaml',
+    'pose': 'coco128-kpt.yaml',
+    'classify': 'imagenet100'}
+TASK2MODEL = {
+    'detect': 'yolov8n.pt',
+    'segment': 'yolov8n-seg.pt',
+    'pose': 'yolov8n-pose.yaml',
+    'classify': 'yolov8n-cls.pt'}  # temp
 
 
 def cfg2dict(cfg):
@@ -274,8 +284,11 @@ def entrypoint(debug=''):
 
     # Task
     task = overrides.pop('task', None)
-    if task and task not in TASKS:
-        raise ValueError(f"Invalid 'task={task}'. Valid tasks are {TASKS}.\n{CLI_HELP_MSG}")
+    if task:
+        if task not in TASKS:
+            raise ValueError(f"Invalid 'task={task}'. Valid tasks are {TASKS}.\n{CLI_HELP_MSG}")
+        if 'model' not in overrides:
+            overrides['model'] = TASK2MODEL[task]
 
     # Model
     model = overrides.pop('model', DEFAULT_CFG.model)
@@ -287,20 +300,20 @@ def entrypoint(debug=''):
     model = YOLO(model, task=task)
 
     # Task Update
-    if task and task != model.task:
-        LOGGER.warning(f"WARNING ⚠️ conflicting 'task={task}' passed with 'task={model.task}' model. "
-                       f"Ignoring 'task={task}' and updating to 'task={model.task}' to match model.")
+    if task != model.task:
+        if task:
+            LOGGER.warning(f"WARNING ⚠️ conflicting 'task={task}' passed with 'task={model.task}' model. "
+                           f"Ignoring 'task={task}' and updating to 'task={model.task}' to match model.")
         task = model.task
 
     # Mode
-    if mode in {'predict', 'track'} and 'source' not in overrides:
+    if mode in ('predict', 'track') and 'source' not in overrides:
         overrides['source'] = DEFAULT_CFG.source or ROOT / 'assets' if (ROOT / 'assets').exists() \
             else 'https://ultralytics.com/images/bus.jpg'
         LOGGER.warning(f"WARNING ⚠️ 'source' is missing. Using default 'source={overrides['source']}'.")
     elif mode in ('train', 'val'):
         if 'data' not in overrides:
-            task2data = dict(detect='coco128.yaml', segment='coco128-seg.yaml', classify='imagenet100')
-            overrides['data'] = task2data.get(task or DEFAULT_CFG.task, DEFAULT_CFG.data)
+            overrides['data'] = TASK2DATA.get(task or DEFAULT_CFG.task, DEFAULT_CFG.data)
             LOGGER.warning(f"WARNING ⚠️ 'data' is missing. Using default 'data={overrides['data']}'.")
     elif mode == 'export':
         if 'format' not in overrides:

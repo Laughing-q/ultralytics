@@ -2,7 +2,7 @@
 """
 Ultralytics Results, Boxes and Masks classes for handling inference results
 
-Usage: See https://docs.ultralytics.com/predict/
+Usage: See https://docs.ultralytics.com/modes/predict/
 """
 
 import pprint
@@ -40,15 +40,16 @@ class Results:
         _keys (tuple): A tuple of attribute names for non-empty attributes.
     """
 
-    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None) -> None:
+    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None) -> None:
         self.orig_img = orig_img
         self.orig_shape = orig_img.shape[:2]
         self.boxes = Boxes(boxes, self.orig_shape) if boxes is not None else None  # native size boxes
         self.masks = Masks(masks, self.orig_shape) if masks is not None else None  # native size or imgsz masks
         self.probs = probs if probs is not None else None
+        self.keypoints = keypoints if keypoints is not None else None
         self.names = names
         self.path = path
-        self._keys = (k for k in ('boxes', 'masks', 'probs') if getattr(self, k) is not None)
+        self._keys = [k for k in ('boxes', 'masks', 'probs', 'keypoints') if getattr(self, k) is not None]
 
     def pandas(self):
         pass
@@ -107,7 +108,14 @@ class Results:
         name = self.__class__.__name__
         raise AttributeError(f"'{name}' object has no attribute '{attr}'. See valid attributes below.\n{self.__doc__}")
 
-    def plot(self, show_conf=True, line_width=None, font_size=None, font='Arial.ttf', pil=False, example='abc'):
+    def plot(self,
+             show_conf=True,
+             line_width=None,
+             font_size=None,
+             font='Arial.ttf',
+             pil=False,
+             example='abc',
+             kpt_line=True):
         """
         Plots the detection results on an input RGB image. Accepts a numpy array (cv2) or a PIL Image.
 
@@ -118,16 +126,17 @@ class Results:
             font (str): The font to use for the text.
             pil (bool): Whether to return the image as a PIL Image.
             example (str): An example string to display. Useful for indicating the expected format of the output.
+            kpt_line (bool): Whether to draw lines connecting keypoints.
 
         Returns:
             (None) or (PIL.Image): If `pil` is True, a PIL Image is returned. Otherwise, nothing is returned.
         """
-        img = deepcopy(self.orig_img)
-        annotator = Annotator(img, line_width, font_size, font, pil, example)
+        annotator = Annotator(deepcopy(self.orig_img), line_width, font_size, font, pil, example)
         boxes = self.boxes
         masks = self.masks
         logits = self.probs
         names = self.names
+        keypoints = self.keypoints
         if boxes is not None:
             for d in reversed(boxes):
                 cls, conf = d.cls.squeeze(), d.conf.squeeze()
@@ -136,7 +145,7 @@ class Results:
                 annotator.box_label(d.xyxy.squeeze(), label, color=colors(c, True))
 
         if masks is not None:
-            im = torch.as_tensor(img, dtype=torch.float16, device=masks.data.device).permute(2, 0, 1).flip(0)
+            im = torch.as_tensor(annotator.im, dtype=torch.float16, device=masks.data.device).permute(2, 0, 1).flip(0)
             im = F.resize(im.contiguous(), masks.data.shape[1:]) / 255
             annotator.masks(masks.data, colors=[colors(x, True) for x in boxes.cls], im_gpu=im)
 
@@ -146,7 +155,11 @@ class Results:
             text = f"{', '.join(f'{names[j] if names else j} {logits[j]:.2f}' for j in top5i)}, "
             annotator.text((32, 32), text, txt_color=(255, 255, 255))  # TODO: allow setting colors
 
-        return img
+        if keypoints is not None:
+            for k in reversed(keypoints):
+                annotator.kpts(k, self.orig_shape, kpt_line=kpt_line)
+
+        return np.asarray(annotator.im) if annotator.pil else annotator.im
 
 
 class Boxes:
@@ -186,7 +199,7 @@ class Boxes:
         if boxes.ndim == 1:
             boxes = boxes[None, :]
         n = boxes.shape[-1]
-        assert n in {6, 7}, f'expected `n` in [6, 7], but got {n}'  # xyxy, (track_id), conf, cls
+        assert n in (6, 7), f'expected `n` in [6, 7], but got {n}'  # xyxy, (track_id), conf, cls
         # TODO
         self.is_track = n == 7
         self.boxes = boxes
@@ -263,8 +276,11 @@ class Boxes:
         return self.boxes.__str__()
 
     def __repr__(self):
-        return (f'Ultralytics YOLO {self.__class__.__name__}\n' + f'type: {type(self.boxes)}\n' +
-                f'shape: {self.boxes.shape}\n' + f'dtype: {self.boxes.dtype}\n + {self.boxes.__repr__()}')
+        return (f'{self.__class__.__module__}.{self.__class__.__name__}\n'
+                f'type:  {self.boxes.__class__.__module__}.{self.boxes.__class__.__name__}\n'
+                f'shape: {self.boxes.shape}\n'
+                f'dtype: {self.boxes.dtype}\n'
+                f'{self.boxes.__repr__()}')
 
     def __getitem__(self, idx):
         return Boxes(self.boxes[idx], self.orig_shape)
@@ -339,8 +355,11 @@ class Masks:
         return self.masks.__str__()
 
     def __repr__(self):
-        return (f'Ultralytics YOLO {self.__class__.__name__}\n' + f'type: {type(self.masks)}\n' +
-                f'shape: {self.masks.shape}\n' + f'dtype: {self.masks.dtype}\n + {self.masks.__repr__()}')
+        return (f'{self.__class__.__module__}.{self.__class__.__name__}\n'
+                f'type:  {self.masks.__class__.__module__}.{self.masks.__class__.__name__}\n'
+                f'shape: {self.masks.shape}\n'
+                f'dtype: {self.masks.dtype}\n'
+                f'{self.masks.__repr__()}')
 
     def __getitem__(self, idx):
         return Masks(self.masks[idx], self.orig_shape)

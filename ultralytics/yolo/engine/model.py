@@ -4,13 +4,13 @@ import sys
 from pathlib import Path
 
 from ultralytics import yolo  # noqa
-from ultralytics.nn.tasks import (ClassificationModel, DetectionModel, SegmentationModel, attempt_load_one_weight,
-                                  guess_model_task, nn)
+from ultralytics.nn.tasks import (ClassificationModel, DetectionModel, PoseModel, SegmentationModel,
+                                  attempt_load_one_weight, guess_model_task, nn)
 from ultralytics.yolo.cfg import get_cfg
 from ultralytics.yolo.engine.exporter import Exporter
 from ultralytics.yolo.utils import (DEFAULT_CFG, DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, ONLINE, RANK, ROOT,
                                     callbacks, is_git_dir, is_pip_package, yaml_load)
-from ultralytics.yolo.utils.checks import check_file, check_imgsz, check_pip_update, check_yaml
+from ultralytics.yolo.utils.checks import check_file, check_imgsz, check_pip_update_available, check_yaml
 from ultralytics.yolo.utils.downloads import GITHUB_ASSET_STEMS
 from ultralytics.yolo.utils.torch_utils import smart_inference_mode
 
@@ -23,12 +23,9 @@ TASK_MAP = {
         DetectionModel, yolo.v8.detect.DetectionTrainer, yolo.v8.detect.DetectionValidator,
         yolo.v8.detect.DetectionPredictor],
     'segment': [
-        SegmentationModel, 'yolo.TYPE.segment.SegmentationTrainer', 'yolo.TYPE.segment.SegmentationValidator',
-        'yolo.TYPE.segment.SegmentationPredictor'],
-    'keypoint': [
-        DetectionModel, 'yolo.TYPE.detect.DetectionTrainer', 'yolo.TYPE.detect.DetectionValidator',
-        'yolo.TYPE.detect.DetectionPredictor']  # temp untill keypoint modes are not  implemented
-}
+        SegmentationModel, yolo.v8.segment.SegmentationTrainer, yolo.v8.segment.SegmentationValidator,
+        yolo.v8.segment.SegmentationPredictor],
+    'pose': [PoseModel, yolo.v8.pose.PoseTrainer, yolo.v8.pose.PoseValidator, yolo.v8.pose.PosePredictor]}
 
 
 class YOLO:
@@ -162,7 +159,7 @@ class YOLO:
         Inform user of ultralytics package update availability
         """
         if ONLINE and is_pip_package():
-            check_pip_update()
+            check_pip_update_available()
 
     def reset(self):
         """
@@ -175,7 +172,7 @@ class YOLO:
         for p in self.model.parameters():
             p.requires_grad = True
 
-    def info(self, verbose=False):
+    def info(self, verbose=True):
         """
         Logs model info.
 
@@ -207,6 +204,8 @@ class YOLO:
         if source is None:
             source = ROOT / 'assets' if is_git_dir() else 'https://ultralytics.com/images/bus.jpg'
             LOGGER.warning(f"WARNING ⚠️ 'source' is missing. Using 'source={source}'.")
+        is_cli = (sys.argv[0].endswith('yolo') or sys.argv[0].endswith('ultralytics')) and \
+                 ('predict' in sys.argv or 'mode=predict' in sys.argv)
 
         overrides = self.overrides.copy()
         overrides['conf'] = 0.25
@@ -217,10 +216,9 @@ class YOLO:
         if not self.predictor:
             self.task = overrides.get('task') or self.task
             self.predictor = TASK_MAP[self.task][3](overrides=overrides)
-            self.predictor.setup_model(model=self.model)
+            self.predictor.setup_model(model=self.model, verbose=is_cli)
         else:  # only update args if predictor is already setup
             self.predictor.args = get_cfg(self.predictor.args, overrides)
-        is_cli = sys.argv[0].endswith('yolo') or sys.argv[0].endswith('ultralytics')
         return self.predictor.predict_cli(source=source) if is_cli else self.predictor(source=source, stream=stream)
 
     def track(self, source=None, stream=False, **kwargs):
@@ -322,7 +320,7 @@ class YOLO:
         self.trainer.hub_session = self.session  # attach optional HUB session
         self.trainer.train()
         # update model and cfg after training
-        if RANK in {0, -1}:
+        if RANK in (-1, 0):
             self.model, _ = attempt_load_one_weight(str(self.trainer.best))
             self.overrides = self.model.args
             self.metrics = getattr(self.trainer.validator, 'metrics', None)  # TODO: no metrics returned by DDP

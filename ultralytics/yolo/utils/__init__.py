@@ -17,7 +17,6 @@ from typing import Union
 
 import cv2
 import numpy as np
-import pandas as pd
 import torch
 import yaml
 
@@ -95,8 +94,6 @@ HELP_MSG = \
 # Settings
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
-pd.options.display.max_columns = 10
-pd.options.display.width = 120
 cv2.setNumThreads(0)  # prevent OpenCV from multithreading (incompatible with PyTorch DataLoader)
 os.environ['NUMEXPR_MAX_THREADS'] = str(NUM_THREADS)  # NumExpr max threads
 os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'  # for deterministic training
@@ -124,6 +121,37 @@ class IterableSimpleNamespace(SimpleNamespace):
 
     def get(self, key, default=None):
         return getattr(self, key, default)
+
+
+def set_logging(name=LOGGING_NAME, verbose=True):
+    # sets up logging for the given name
+    rank = int(os.getenv('RANK', -1))  # rank in world for Multi-GPU trainings
+    level = logging.INFO if verbose and rank in (-1, 0) else logging.ERROR
+    logging.config.dictConfig({
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            name: {
+                'format': '%(message)s'}},
+        'handlers': {
+            name: {
+                'class': 'logging.StreamHandler',
+                'formatter': name,
+                'level': level}},
+        'loggers': {
+            name: {
+                'level': level,
+                'handlers': [name],
+                'propagate': False}}})
+
+
+# Set logger
+set_logging(LOGGING_NAME, verbose=VERBOSE)  # run before defining LOGGER
+LOGGER = logging.getLogger(LOGGING_NAME)  # define globally (used in train.py, val.py, detect.py, etc.)
+if WINDOWS:  # emoji-safe logging
+    info_fn, warning_fn = LOGGER.info, LOGGER.warning
+    setattr(LOGGER, info_fn.__name__, lambda x: info_fn(emojis(x)))
+    setattr(LOGGER, warning_fn.__name__, lambda x: warning_fn(emojis(x)))
 
 
 def yaml_save(file='data.yaml', data=None):
@@ -163,10 +191,13 @@ def yaml_load(file='data.yaml', append_filename=False):
         dict: YAML data and file name.
     """
     with open(file, errors='ignore', encoding='utf-8') as f:
-        # Add YAML filename to dict and return
         s = f.read()  # string
-        if not s.isprintable():  # remove special characters
+
+        # Remove special characters
+        if not s.isprintable():
             s = re.sub(r'[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+', '', s)
+
+        # Add YAML filename to dict and return
         return {**yaml.safe_load(s), 'yaml_file': str(file)} if append_filename else yaml.safe_load(s)
 
 
@@ -448,41 +479,6 @@ def colorstr(*input):
     return ''.join(colors[x] for x in args) + f'{string}' + colors['end']
 
 
-def remove_ansi_codes(string):
-    """
-    Remove ANSI escape sequences from a string.
-
-    Args:
-        string (str): The input string that may contain ANSI escape sequences.
-
-    Returns:
-        str: The input string with ANSI escape sequences removed.
-    """
-    return re.sub(r'\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]', '', string)
-
-
-def set_logging(name=LOGGING_NAME, verbose=True):
-    # sets up logging for the given name
-    rank = int(os.getenv('RANK', -1))  # rank in world for Multi-GPU trainings
-    level = logging.INFO if verbose and rank in {-1, 0} else logging.ERROR
-    logging.config.dictConfig({
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            name: {
-                'format': '%(message)s'}},
-        'handlers': {
-            name: {
-                'class': 'logging.StreamHandler',
-                'formatter': name,
-                'level': level}},
-        'loggers': {
-            name: {
-                'level': level,
-                'handlers': [name],
-                'propagate': False}}})
-
-
 class TryExcept(contextlib.ContextDecorator):
     # YOLOv8 TryExcept class. Usage: @TryExcept() decorator or 'with TryExcept():' context manager
     def __init__(self, msg='', verbose=True):
@@ -528,7 +524,7 @@ def set_sentry():
         return event
 
     if SETTINGS['sync'] and \
-            RANK in {-1, 0} and \
+            RANK in (-1, 0) and \
             Path(sys.argv[0]).name == 'yolo' and \
             not TESTS_RUNNING and \
             ONLINE and \
@@ -608,13 +604,6 @@ def set_settings(kwargs, file=USER_CONFIG_DIR / 'settings.yaml'):
 
 
 # Run below code on yolo/utils init ------------------------------------------------------------------------------------
-
-# Set logger
-set_logging(LOGGING_NAME, verbose=VERBOSE)  # run before defining LOGGER
-LOGGER = logging.getLogger(LOGGING_NAME)  # define globally (used in train.py, val.py, detect.py, etc.)
-if WINDOWS:
-    for fn in LOGGER.info, LOGGER.warning:
-        setattr(LOGGER, fn.__name__, lambda x: fn(emojis(x)))  # emoji safe logging
 
 # Check first-install steps
 PREFIX = colorstr('Ultralytics: ')

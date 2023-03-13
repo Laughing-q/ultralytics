@@ -16,14 +16,15 @@ import numpy as np
 from PIL import ExifTags, Image, ImageOps
 from tqdm import tqdm
 
+from ultralytics.nn.autobackend import check_class_names
 from ultralytics.yolo.utils import DATASETS_DIR, LOGGER, NUM_THREADS, ROOT, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_file, check_font, is_ascii
 from ultralytics.yolo.utils.downloads import download, safe_download, unzip_file
 from ultralytics.yolo.utils.ops import segments2boxes
 
 HELP_URL = 'See https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
-IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # include image suffixes
-VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv'  # include video suffixes
+IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # image suffixes
+VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv', 'webm'  # video suffixes
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv('RANK', -1))
 PIN_MEMORY = str(os.getenv('PIN_MEMORY', True)).lower() == 'true'  # global pin_memory for dataloaders
@@ -96,12 +97,7 @@ def verify_image_label(args):
                     assert lb.shape[1] == 56, 'labels require 56 columns each'
                     assert (lb[:, 5::3] <= 1).all(), 'non-normalized or out of bounds coordinate labels'
                     assert (lb[:, 6::3] <= 1).all(), 'non-normalized or out of bounds coordinate labels'
-                    kpts = np.zeros((lb.shape[0], 39))
-                    for i in range(len(lb)):
-                        kpt = np.delete(lb[i, 5:], np.arange(2, lb.shape[1] - 5, 3))  # remove occlusion param from GT
-                        kpts[i] = np.hstack((lb[i, :5], kpt))
-                    lb = kpts
-                    assert lb.shape[1] == 39, 'labels require 39 columns each after removing occlusion parameter'
+                    assert lb.shape[1] == 56, 'labels require 56 columns each after removing occlusion parameter'
                 else:
                     assert lb.shape[1] == 5, f'labels require 5 columns, {lb.shape[1]} columns detected'
                     assert (lb[:, 1:] <= 1).all(), \
@@ -120,12 +116,12 @@ def verify_image_label(args):
                     msg = f'{prefix}WARNING ⚠️ {im_file}: {nl - len(i)} duplicate labels removed'
             else:
                 ne = 1  # label empty
-                lb = np.zeros((0, 39), dtype=np.float32) if keypoint else np.zeros((0, 5), dtype=np.float32)
+                lb = np.zeros((0, 56), dtype=np.float32) if keypoint else np.zeros((0, 5), dtype=np.float32)
         else:
             nm = 1  # label missing
-            lb = np.zeros((0, 39), dtype=np.float32) if keypoint else np.zeros((0, 5), dtype=np.float32)
+            lb = np.zeros((0, 56), dtype=np.float32) if keypoint else np.zeros((0, 5), dtype=np.float32)
         if keypoint:
-            keypoints = lb[:, 5:].reshape(-1, 17, 2)
+            keypoints = lb[:, 5:].reshape(-1, 17, 3)
         lb = lb[:, :5]
         return im_file, lb, shape, segments, keypoints, nm, nf, ne, nc, msg
     except Exception as e:
@@ -209,10 +205,8 @@ def check_det_dataset(dataset, autodownload=True):
     for k in 'train', 'val', 'names':
         if k not in data:
             raise SyntaxError(
-                emojis(f"{dataset} '{k}:' key missing ❌.\n"
-                       f"'train', 'val' and 'names' are required in data.yaml files."))
-    if isinstance(data['names'], (list, tuple)):  # old array format
-        data['names'] = dict(enumerate(data['names']))  # convert to dict
+                emojis(f"{dataset} '{k}:' key missing ❌.\n'train', 'val' and 'names' are required in all data YAMLs."))
+    data['names'] = check_class_names(data['names'])
     data['nc'] = len(data['names'])
 
     # Resolve paths
@@ -236,11 +230,11 @@ def check_det_dataset(dataset, autodownload=True):
     if val:
         val = [Path(x).resolve() for x in (val if isinstance(val, list) else [val])]  # val path
         if not all(x.exists() for x in val):
-            msg = f"\nDataset '{dataset}' not found ⚠️, missing paths %s" % [str(x) for x in val if not x.exists()]
+            m = f"\nDataset '{dataset}' images not found ⚠️, missing paths %s" % [str(x) for x in val if not x.exists()]
             if s and autodownload:
-                LOGGER.warning(msg)
+                LOGGER.warning(m)
             else:
-                raise FileNotFoundError(msg)
+                raise FileNotFoundError(m)
             t = time.time()
             if s.startswith('http') and s.endswith('.zip'):  # URL
                 safe_download(url=s, dir=DATASETS_DIR, delete=True)
