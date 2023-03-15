@@ -109,8 +109,9 @@ class PoseValidator(DetectionValidator):
         """
         if pred_kpts is not None and gt_kpts is not None:
             # `0.53` is from https://github.com/jin-s13/xtcocoapi/blob/master/xtcocotools/cocoeval.py#L384
-            area = ops.xyxy2xywh(labels[:, 1:])[:, 2:].prod(1) * 0.53
-            iou = kpt_iou(gt_kpts, pred_kpts, area=area)
+            # area = ops.xyxy2xywh(labels[:, 1:])[:, 2:].prod(1) * 0.53
+            # iou = kpt_iou(gt_kpts, pred_kpts, area=area)
+            iou = kpt_iou(gt_kpts, pred_kpts, bbox=ops.xyxy2xywh(labels[:, 1:]))
         else:  # boxes
             iou = box_iou(labels[:, 1:], detections[:, :4])
 
@@ -203,3 +204,4 @@ def val(cfg=DEFAULT_CFG, use_python=False):
 
 if __name__ == '__main__':
     val()
+
