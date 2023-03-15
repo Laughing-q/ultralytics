@@ -120,54 +120,18 @@ def mask_iou(mask1, mask2, eps=1e-7):
     return intersection / (union + eps)
 
 
-# def kpt_iou(kpt1, kpt2, area, eps=1e-7):
-#     """OKS
-#     kpt1: [N, 51], gt
-#     kpt2: [M, 51], pred
-#     area: [N], areas from gt
-#     """
-#     d = (kpt1[:, None, 0::3] - kpt2[:, 0::3]) ** 2 + (kpt1[:, None, 1::3] - kpt2[:, 1::3]) ** 2  # (N, M, 17)
-#     sigma = torch.tensor(OKS_SIGMA, device=kpt1.device, dtype=kpt1.dtype)  # (17, )
-#     kpt_mask = kpt1[:, 2::3] != 0  # (N, 17)
-#     e = d / (2 * sigma) ** 2 / (area[:, None, None] + eps) / 2  # from cocoeval
-#     # e = d / ((area[None, :, None] + eps) * sigma) ** 2 / 2  # from formula
-#     return (torch.exp(-e) * kpt_mask[:, None]).sum(-1) / kpt_mask.sum(-1)[:, None]
-
-def kpt_iou(kpt1, kpt2, bbox, eps=1e-7):
+def kpt_iou(kpt1, kpt2, area, eps=1e-7):
     """OKS
     kpt1: [N, 51], gt
     kpt2: [M, 51], pred
-    bbox: [N], bboxes from gt, xywh
+    area: [N], areas from gt
     """
+    d = (kpt1[:, None, 0::3] - kpt2[:, 0::3]) ** 2 + (kpt1[:, None, 1::3] - kpt2[:, 1::3]) ** 2  # (N, M, 17)
     sigma = torch.tensor(OKS_SIGMA, device=kpt1.device, dtype=kpt1.dtype)  # (17, )
     kpt_mask = kpt1[:, 2::3] != 0  # (N, 17)
-    ious = torch.zeros((len(kpt1), len(kpt2)), device=kpt1.device)  # (N, M)
-    for i in range(len(kpt_mask)):
-        box = bbox[i]
-        if kpt_mask[i].sum() > 0:
-            dx = kpt1[i, 0::3] - kpt2[:, 0::3]  # (M, 17)
-            dy = kpt1[i, 1::3] - kpt2[:, 1::3]
-        else:
-            box[:2] -= box[2:] / 2
-            z = torch.zeros((len(kpt2), len(sigma)), device=kpt2.device)
-            x0 = box[0] - box[2]
-            x1 = box[0] + box[2] * 2
-            y0 = box[1] - box[3]
-            y1 = box[1] + box[3] * 2
-            xd = kpt2[:, 0::3]
-            yd = kpt2[:, 1::3]
-            dx = torch.maximum(z, x0 - xd) + torch.maximum(z, xd - x1)
-            dy = torch.maximum(z, y0 - yd) + torch.maximum(z, yd - y1)
-        area = box[2:].prod() #* 0.53
-        e = (dx**2 + dy**2) / (2 * sigma) ** 2 / (area + eps) / 2  # from cocoeval
-        if kpt_mask[i].sum() > 0:
-            e = torch.exp(-e) * kpt_mask[i]
-            deno = kpt_mask[i].sum()
-        else:
-            deno = e.shape[-1]
-            e = torch.exp(-e)
-        ious[i] = e.sum(-1) / deno
-    return ious
+    e = d / (2 * sigma) ** 2 / (area[:, None, None] + eps) / 2  # from cocoeval
+    # e = d / ((area[None, :, None] + eps) * sigma) ** 2 / 2  # from formula
+    return (torch.exp(-e) * kpt_mask[:, None]).sum(-1) / kpt_mask.sum(-1)[:, None]
 
 
 def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
