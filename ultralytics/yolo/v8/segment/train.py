@@ -1,4 +1,4 @@
-# Ultralytics YOLO 🚀, GPL-3.0 license
+# Ultralytics YOLO 🚀, AGPL-3.0 license
 from copy import copy
 
 import torch
@@ -17,13 +17,15 @@ from ultralytics.yolo.v8.detect.train import Loss
 # BaseTrainer python usage
 class SegmentationTrainer(v8.detect.DetectionTrainer):
 
-    def __init__(self, cfg=DEFAULT_CFG, overrides=None):
+    def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
+        """Initialize a SegmentationTrainer object with given arguments."""
         if overrides is None:
             overrides = {}
         overrides['task'] = 'segment'
-        super().__init__(cfg, overrides)
+        super().__init__(cfg, overrides, _callbacks)
 
     def get_model(self, cfg=None, weights=None, verbose=True):
+        """Return SegmentationModel initialized with specified config and weights."""
         model = SegmentationModel(cfg, ch=3, nc=self.data['nc'], verbose=verbose and RANK == -1)
         if weights:
             model.load(weights)
@@ -31,15 +33,18 @@ class SegmentationTrainer(v8.detect.DetectionTrainer):
         return model
 
     def get_validator(self):
+        """Return an instance of SegmentationValidator for validation of YOLO model."""
         self.loss_names = 'box_loss', 'seg_loss', 'cls_loss', 'dfl_loss'
         return v8.segment.SegmentationValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args))
 
     def criterion(self, preds, batch):
+        """Returns the computed loss using the SegLoss class on the given predictions and batch."""
         if not hasattr(self, 'compute_loss'):
             self.compute_loss = SegLoss(de_parallel(self.model), overlap=self.args.overlap_mask)
         return self.compute_loss(preds, batch)
 
     def plot_training_samples(self, batch, ni):
+        """Creates a plot of training sample images with labels and box coordinates."""
         images = batch['img']
         masks = batch['masks']
         cls = batch['cls'].squeeze(-1)
@@ -49,6 +54,7 @@ class SegmentationTrainer(v8.detect.DetectionTrainer):
         plot_images(images, batch_idx, cls, bboxes, masks, paths=paths, fname=self.save_dir / f'train_batch{ni}.jpg')
 
     def plot_metrics(self):
+        """Plots training/val metrics."""
         plot_results(file=self.csv, segment=True)  # save results.png
 
 
@@ -61,6 +67,7 @@ class SegLoss(Loss):
         self.overlap = overlap
 
     def __call__(self, preds, batch):
+        """Calculate and return the loss for the YOLO model."""
         loss = torch.zeros(4, device=self.device)  # box, cls, dfl
         feats, pred_masks, proto = preds if len(preds) == 3 else preds[1]
         batch_size, _, mask_h, mask_w = proto.shape  # batch size, number of masks, mask height, mask width
@@ -88,7 +95,7 @@ class SegLoss(Loss):
                             "This error can occur when incorrectly training a 'segment' model on a 'detect' dataset, "
                             "i.e. 'yolo train model=yolov8n-seg.pt data=coco128.yaml'.\nVerify your dataset is a "
                             "correctly formatted 'segment' dataset using 'data=coco128-seg.yaml' "
-                            'as an example.\nSee https://docs.ultralytics.com/tasks/segmentation/ for help.') from e
+                            'as an example.\nSee https://docs.ultralytics.com/tasks/segment/ for help.') from e
 
         # pboxes
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
@@ -122,13 +129,15 @@ class SegLoss(Loss):
                     xyxyn = target_bboxes[i][fg_mask[i]] / imgsz[[1, 0, 1, 0]]
                     marea = xyxy2xywh(xyxyn)[:, 2:].prod(1)
                     mxyxy = xyxyn * torch.tensor([mask_w, mask_h, mask_w, mask_h], device=self.device)
-                    loss[1] += self.single_mask_loss(gt_mask, pred_masks[i][fg_mask[i]], proto[i], mxyxy,
-                                                     marea)  # seg loss
-        # WARNING: Uncomment lines below in case of Multi-GPU DDP unused gradient errors
-        #         else:
-        #             loss[1] += proto.sum() * 0 + pred_masks.sum() * 0
-        # else:
-        #     loss[1] += proto.sum() * 0 + pred_masks.sum() * 0
+                    loss[1] += self.single_mask_loss(gt_mask, pred_masks[i][fg_mask[i]], proto[i], mxyxy, marea)  # seg
+
+                # WARNING: lines below prevents Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
+                else:
+                    loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
+
+        # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
+        else:
+            loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
 
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.box / batch_size  # seg gain
@@ -138,13 +147,14 @@ class SegLoss(Loss):
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
     def single_mask_loss(self, gt_mask, pred, proto, xyxy, area):
-        # Mask loss for one image
+        """Mask loss for one image."""
         pred_mask = (pred @ proto.view(self.nm, -1)).view(-1, *proto.shape[1:])  # (n, 32) @ (32,80,80) -> (n,80,80)
         loss = F.binary_cross_entropy_with_logits(pred_mask, gt_mask, reduction='none')
         return (crop_mask(loss, xyxy).mean(dim=(1, 2)) / area).mean()
 
 
 def train(cfg=DEFAULT_CFG, use_python=False):
+    """Train a YOLO segmentation model based on passed arguments."""
     model = cfg.model or 'yolov8n-seg.pt'
     data = cfg.data or 'coco128-seg.yaml'  # or yolo.ClassificationDataset("mnist")
     device = cfg.device if cfg.device is not None else ''

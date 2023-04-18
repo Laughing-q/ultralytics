@@ -21,16 +21,24 @@ training arguments.
         from ultralytics import YOLO
         
         # Load a model
-        model = YOLO("yolov8n.yaml")  # build a new model from scratch
-        model = YOLO("yolov8n.pt")  # load a pretrained model (recommended for training)
+        model = YOLO('yolov8n.yaml')  # build a new model from YAML
+        model = YOLO('yolov8n.pt')  # load a pretrained model (recommended for training)
+        model = YOLO('yolov8n.yaml').load('yolov8n.pt')  # build from YAML and transfer weights
         
         # Train the model
-        model.train(data="coco128.yaml", epochs=100, imgsz=640)
+        model.train(data='coco128.yaml', epochs=100, imgsz=640)
         ```
     === "CLI"
     
         ```bash
+        # Build a new model from YAML and start training from scratch
+        yolo detect train data=coco128.yaml model=yolov8n.yaml epochs=100 imgsz=640
+
+        # Start training from a pretrained *.pt model
         yolo detect train data=coco128.yaml model=yolov8n.pt epochs=100 imgsz=640
+
+        # Build a new model from YAML, transfer pretrained weights to it and start training
+        yolo detect train data=coco128.yaml model=yolov8n.yaml pretrained=yolov8n.pt epochs=100 imgsz=640
         ```
 
 ## Arguments
@@ -65,10 +73,11 @@ task.
 | `deterministic`   | `True`   | whether to enable deterministic mode                                        |
 | `single_cls`      | `False`  | train multi-class data as single-class                                      |
 | `image_weights`   | `False`  | use weighted image selection for training                                   |
-| `rect`            | `False`  | support rectangular training                                                |
+| `rect`            | `False`  | rectangular training with each batch collated for minimum padding           |
 | `cos_lr`          | `False`  | use cosine learning rate scheduler                                          |
-| `close_mosaic`    | `10`     | disable mosaic augmentation for final 10 epochs                             |
+| `close_mosaic`    | `0`      | (int) disable mosaic augmentation for final epochs                          |
 | `resume`          | `False`  | resume training from last checkpoint                                        |
+| `amp`             | `True`   | Automatic Mixed Precision (AMP) training, choices=[True, False]             |
 | `lr0`             | `0.01`   | initial learning rate (i.e. SGD=1E-2, Adam=1E-3)                            |
 | `lrf`             | `0.01`   | final learning rate (lr0 * lrf)                                             |
 | `momentum`        | `0.937`  | SGD momentum/Adam beta1                                                     |
@@ -79,7 +88,8 @@ task.
 | `box`             | `7.5`    | box loss gain                                                               |
 | `cls`             | `0.5`    | cls loss gain (scale with pixels)                                           |
 | `dfl`             | `1.5`    | dfl loss gain                                                               |
-| `fl_gamma`        | `0.0`    | focal loss gamma (efficientDet default gamma=1.5)                           |
+| `pose`            | `12.0`   | pose loss gain (pose-only)                                                  |
+| `kobj`            | `2.0`    | keypoint obj loss gain (pose-only)                                          |
 | `label_smoothing` | `0.0`    | label smoothing (fraction)                                                  |
 | `nbs`             | `64`     | nominal batch size                                                          |
 | `overlap_mask`    | `True`   | masks should overlap during training (segment train only)                   |

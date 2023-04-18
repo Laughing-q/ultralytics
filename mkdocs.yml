@@ -1,6 +1,7 @@
-# Ultralytics YOLO 🚀, GPL-3.0 license
+# Ultralytics YOLO 🚀, AGPL-3.0 license
 
-site_name: YOLOv8 Docs
+site_name: Ultralytics YOLOv8 Docs
+site_url: https://docs.ultralytics.com
 repo_url: https://github.com/ultralytics/ultralytics
 edit_uri: https://github.com/ultralytics/ultralytics/tree/main/docs
 repo_name: ultralytics/ultralytics
@@ -9,9 +10,10 @@ remote_name: https://github.com/ultralytics/docs
 theme:
   name: "material"
   logo: https://github.com/ultralytics/assets/raw/main/logo/Ultralytics_Logotype_Reverse.svg
-  favicon: https://github.com/ultralytics/assets/raw/main/logo/favicon-yolo.ico
+  favicon: assets/favicon.ico
   font:
     text: Roboto
+    code: Roboto Mono
 
   palette:
     # Palette toggle for light mode
@@ -30,13 +32,15 @@ theme:
   features:
     - content.action.edit
     - content.code.annotate
+    - content.code.copy
     - content.tooltips
     - search.highlight
     - search.share
     - search.suggest
     - toc.follow
+    - toc.integrate
     - navigation.top
-    - navigation.expand
+    - navigation.tabs
     - navigation.footer
     - navigation.tracking
     - navigation.instant
@@ -44,7 +48,7 @@ theme:
     - content.tabs.link  # all code tabs change simultaneously
 
 # Customization
-copyright: Ultralytics 2023. All rights reserved.
+copyright: <a href="https://ultralytics.com" target="_blank">Ultralytics 2023.</a> All rights reserved.
 extra:
   # version:
   #   provider: mike  #  version drop-down menu
@@ -63,13 +67,13 @@ extra:
           data: 0
           note: >-
             Thanks for your feedback!<br>
-            <a href="https://github.com/ultralytics/ultralytics/issues/new?title=Docs+Feedback+for+{title}+page+at+{url}&labels=enhancement&template=feature-request.yml" target="_blank" rel="noopener">Tell us what we can improve.</a>
+            <a href="https://github.com/ultralytics/ultralytics/issues/new?title=Docs+Feedback+for+{title}+page+at+https://docs.ultralytics.com/{url}&labels=enhancement&template=feature-request.yml" target="_blank" rel="noopener">Tell us what we can improve.</a>
 
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/ultralytics
     - icon: fontawesome/brands/linkedin
-      link: https://www.linkedin.com/company/ultralytics
+      link: https://www.linkedin.com/company/ultralytics/
     - icon: fontawesome/brands/twitter
       link: https://twitter.com/ultralytics
     - icon: fontawesome/brands/youtube
@@ -85,6 +89,7 @@ extra_css:
 markdown_extensions:
   # Div text decorators
   - admonition
+  - md_in_html
   - pymdownx.details
   - pymdownx.superfences
   - tables
@@ -95,12 +100,11 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-
-  # Button
-  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji  # noqa
+      emoji_generator: !!python/name:materialx.emoji.to_svg
 
   # Content tabs
-  - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
 
@@ -132,7 +136,7 @@ nav:
       - Detect: tasks/detect.md
       - Segment: tasks/segment.md
       - Classify: tasks/classify.md
-#      - Keypoints: tasks/keypoints.md
+      - Pose: tasks/pose.md
   - Usage:
       - CLI: usage/cli.md
       - Python: usage/python.md
@@ -141,14 +145,104 @@ nav:
       - Advanced Customization: usage/engine.md
   - Ultralytics HUB: hub.md
   - iOS and Android App: app.md
+
   - Reference:
-      - Engine:
-          - Model: reference/model.md
-          - Trainer: reference/base_trainer.md
-          - Validator: reference/base_val.md
-          - Predictor: reference/base_pred.md
-          - Exporter: reference/exporter.md
-          - Results: reference/results.md
-      - ultralytics.nn: reference/nn.md
-      - Operations: reference/ops.md
+    - hub:
+      - auth: reference/hub/auth.md
+      - session: reference/hub/session.md
+      - utils: reference/hub/utils.md
+    - nn:
+      - autobackend: reference/nn/autobackend.md
+      - autoshape: reference/nn/autoshape.md
+      - modules: reference/nn/modules.md
+      - tasks: reference/nn/tasks.md
+    - tracker:
+      - track: reference/tracker/track.md
+      - trackers:
+        - basetrack: reference/tracker/trackers/basetrack.md
+        - bot_sort: reference/tracker/trackers/bot_sort.md
+        - byte_tracker: reference/tracker/trackers/byte_tracker.md
+      - utils:
+        - gmc: reference/tracker/utils/gmc.md
+        - kalman_filter: reference/tracker/utils/kalman_filter.md
+        - matching: reference/tracker/utils/matching.md
+    - yolo:
+      - data:
+        - augment: reference/yolo/data/augment.md
+        - base: reference/yolo/data/base.md
+        - build: reference/yolo/data/build.md
+        - dataloaders:
+          - stream_loaders: reference/yolo/data/dataloaders/stream_loaders.md
+          - v5augmentations: reference/yolo/data/dataloaders/v5augmentations.md
+          - v5loader: reference/yolo/data/dataloaders/v5loader.md
+        - dataset: reference/yolo/data/dataset.md
+        - dataset_wrappers: reference/yolo/data/dataset_wrappers.md
+        - utils: reference/yolo/data/utils.md
+      - engine:
+        - exporter: reference/yolo/engine/exporter.md
+        - model: reference/yolo/engine/model.md
+        - predictor: reference/yolo/engine/predictor.md
+        - results: reference/yolo/engine/results.md
+        - trainer: reference/yolo/engine/trainer.md
+        - validator: reference/yolo/engine/validator.md
+      - utils:
+        - autobatch: reference/yolo/utils/autobatch.md
+        - benchmarks: reference/yolo/utils/benchmarks.md
+        - callbacks:
+          - base: reference/yolo/utils/callbacks/base.md
+          - clearml: reference/yolo/utils/callbacks/clearml.md
+          - comet: reference/yolo/utils/callbacks/comet.md
+          - hub: reference/yolo/utils/callbacks/hub.md
+          - mlflow: reference/yolo/utils/callbacks/mlflow.md
+          - raytune: reference/yolo/utils/callbacks/raytune.md
+          - tensorboard: reference/yolo/utils/callbacks/tensorboard.md
+          - wb: reference/yolo/utils/callbacks/wb.md
+        - checks: reference/yolo/utils/checks.md
+        - dist: reference/yolo/utils/dist.md
+        - downloads: reference/yolo/utils/downloads.md
+        - errors: reference/yolo/utils/errors.md
+        - files: reference/yolo/utils/files.md
+        - instance: reference/yolo/utils/instance.md
+        - loss: reference/yolo/utils/loss.md
+        - metrics: reference/yolo/utils/metrics.md
+        - ops: reference/yolo/utils/ops.md
+        - plotting: reference/yolo/utils/plotting.md
+        - tal: reference/yolo/utils/tal.md
+        - torch_utils: reference/yolo/utils/torch_utils.md
+      - v8:
+        - classify:
+          - predict: reference/yolo/v8/classify/predict.md
+          - train: reference/yolo/v8/classify/train.md
+          - val: reference/yolo/v8/classify/val.md
+        - detect:
+          - predict: reference/yolo/v8/detect/predict.md
+          - train: reference/yolo/v8/detect/train.md
+          - val: reference/yolo/v8/detect/val.md
+        - pose:
+          - predict: reference/yolo/v8/pose/predict.md
+          - train: reference/yolo/v8/pose/train.md
+          - val: reference/yolo/v8/pose/val.md
+        - segment:
+          - predict: reference/yolo/v8/segment/predict.md
+          - train: reference/yolo/v8/segment/train.md
+          - val: reference/yolo/v8/segment/val.md
+
+  - YOLOv5:
+      - yolov5/index.md
+      - Train Custom Data: yolov5/train_custom_data.md
+      - Tips for Best Training Results: yolov5/tips_for_best_training_results.md
+      - Multi-GPU Training: yolov5/multi_gpu_training.md
+      - PyTorch Hub: yolov5/pytorch_hub.md
+      - TFLite, ONNX, CoreML, TensorRT Export: yolov5/export.md
+      - NVIDIA Jetson Nano Deployment: yolov5/jetson_nano.md
+      - Test-Time Augmentation (TTA): yolov5/tta.md
+      - Model Ensembling: yolov5/ensemble.md
+      - Pruning/Sparsity Tutorial: yolov5/pruning_sparsity.md
+      - Hyperparameter evolution: yolov5/hyp_evolution.md
+      - Transfer learning with frozen layers: yolov5/transfer_learn_frozen.md
+      - Architecture Summary: yolov5/architecture.md
+      - Roboflow Datasets: yolov5/roboflow.md
+      - Neural Magic's DeepSparse: yolov5/neural_magic.md
+      - Comet Logging: yolov5/comet.md
+      - Clearml Logging: yolov5/clearml.md
   - Security: SECURITY.md
