@@ -705,6 +705,7 @@ def v8_transforms(dataset, imgsz, hyp):
             scale=hyp.scale,
             shear=hyp.shear,
             perspective=hyp.perspective,
+            area_thr=hyp.area_thr,
             pre_transform=LetterBox(new_shape=(imgsz, imgsz)),
         )])
     flip_idx = dataset.data.get('flip_idx', None)  # for keypoints augmentation
