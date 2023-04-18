@@ -33,7 +33,7 @@ TORCH_1_12 = check_version(torch.__version__, '1.12.0')
 def torch_distributed_zero_first(local_rank: int):
     # Decorator to make all processes in distributed training wait for each local_master to do something
     initialized = torch.distributed.is_available() and torch.distributed.is_initialized()
-    if initialized and local_rank not in {-1, 0}:
+    if initialized and local_rank not in (-1, 0):
         dist.barrier(device_ids=[local_rank])
     yield
     if initialized and local_rank == 0:
@@ -162,11 +162,13 @@ def fuse_deconv_and_bn(deconv, bn):
     return fuseddconv
 
 
-def model_info(model, verbose=False, imgsz=640):
+def model_info(model, detailed=False, verbose=True, imgsz=640):
     # Model information. imgsz may be int or list, i.e. imgsz=640 or imgsz=[640, 320]
+    if not verbose:
+        return
     n_p = get_num_params(model)
     n_g = get_num_gradients(model)  # number gradients
-    if verbose:
+    if detailed:
         LOGGER.info(
             f"{'layer':>5} {'name':>40} {'gradient':>9} {'parameters':>12} {'shape':>20} {'mu':>10} {'sigma':>10}")
         for i, (name, p) in enumerate(model.named_parameters()):
@@ -195,7 +197,7 @@ def get_flops(model, imgsz=640):
         p = next(model.parameters())
         stride = max(int(model.stride.max()), 32) if hasattr(model, 'stride') else 32  # max stride
         im = torch.empty((1, p.shape[1], stride, stride), device=p.device)  # input image in BCHW format
-        flops = thop.profile(deepcopy(model), inputs=(im,), verbose=False)[0] / 1E9 * 2  # stride GFLOPs
+        flops = thop.profile(deepcopy(model), inputs=[im], verbose=False)[0] / 1E9 * 2  # stride GFLOPs
         imgsz = imgsz if isinstance(imgsz, list) else [imgsz, imgsz]  # expand if int/float
         flops = flops * imgsz[0] / stride * imgsz[1] / stride  # 640x640 GFLOPs
         return flops
@@ -374,7 +376,7 @@ def profile(input, ops, n=10, device=None):
             m = m.half() if hasattr(m, 'half') and isinstance(x, torch.Tensor) and x.dtype is torch.float16 else m
             tf, tb, t = 0, 0, [0, 0, 0]  # dt forward, backward
             try:
-                flops = thop.profile(m, inputs=(x,), verbose=False)[0] / 1E9 * 2  # GFLOPs
+                flops = thop.profile(m, inputs=[x], verbose=False)[0] / 1E9 * 2  # GFLOPs
             except Exception:
                 flops = 0
 

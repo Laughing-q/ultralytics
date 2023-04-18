@@ -8,8 +8,6 @@ import cv2
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import seaborn as sn
 import torch
 from PIL import Image, ImageDraw, ImageFont
 from PIL import __version__ as pil_version
@@ -114,7 +112,9 @@ class Annotator:
             self.im = np.asarray(self.im).copy()
         if len(masks) == 0:
             self.im[:] = im_gpu.permute(1, 2, 0).contiguous().cpu().numpy() * 255
-        colors = torch.tensor(colors, device=im_gpu.device, dtype=torch.float32) / 255.0
+        if im_gpu.device != masks.device:
+            im_gpu = im_gpu.to(masks.device)
+        colors = torch.tensor(colors, device=masks.device, dtype=torch.float32) / 255.0
         colors = colors[:, None, None]  # shape(n,1,1,3)
         masks = masks.unsqueeze(3)  # shape(n,h,w,1)
         masks_color = masks * (colors * alpha)  # shape(n,h,w,3)
@@ -159,6 +159,9 @@ class Annotator:
 
 @TryExcept()  # known issue https://github.com/ultralytics/yolov5/issues/5395
 def plot_labels(boxes, cls, names=(), save_dir=Path('')):
+    import pandas as pd
+    import seaborn as sn
+
     # plot dataset labels
     LOGGER.info(f"Plotting labels to {save_dir / 'labels.jpg'}... ")
     b = boxes.transpose()  # classes, boxes
@@ -205,8 +208,7 @@ def plot_labels(boxes, cls, names=(), save_dir=Path('')):
 
 def save_one_box(xyxy, im, file=Path('im.jpg'), gain=1.02, pad=10, square=False, BGR=False, save=True):
     # Save image crop as {file} with crop size multiple {gain} and {pad} pixels. Save and/or return crop
-    xyxy = torch.Tensor(xyxy).view(-1, 4)
-    b = xyxy2xywh(xyxy)  # boxes
+    b = xyxy2xywh(xyxy.view(-1, 4))  # boxes
     if square:
         b[:, 2:] = b[:, 2:].max(1)[0].unsqueeze(1)  # attempt rectangle to square
     b[:, 2:] = b[:, 2:] * gain + pad  # box wh * gain + pad
@@ -273,7 +275,7 @@ def plot_images(images,
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         annotator.rectangle([x, y, x + w, y + h], None, (255, 255, 255), width=2)  # borders
         if paths:
-            annotator.text((x + 5, y + 5 + h), text=Path(paths[i]).name[:40], txt_color=(220, 220, 220))  # filenames
+            annotator.text((x + 5, y + 5), text=Path(paths[i]).name[:40], txt_color=(220, 220, 220))  # filenames
         if len(cls) > 0:
             idx = batch_idx == i
 
@@ -300,14 +302,14 @@ def plot_images(images,
 
             # Plot masks
             if len(masks):
-                if masks.max() > 1.0:  # mean that masks are overlap
+                if idx.shape[0] == masks.shape[0]:  # overlap_masks=False
+                    image_masks = masks[idx]
+                else:  # overlap_masks=True
                     image_masks = masks[[i]]  # (1, 640, 640)
                     nl = idx.sum()
                     index = np.arange(nl).reshape(nl, 1, 1) + 1
                     image_masks = np.repeat(image_masks, nl, axis=0)
                     image_masks = np.where(image_masks == index, 1.0, 0.0)
-                else:
-                    image_masks = masks[idx]
 
                 im = np.asarray(annotator.im).copy()
                 for j, box in enumerate(boxes.T.tolist()):
@@ -328,6 +330,7 @@ def plot_images(images,
 
 def plot_results(file='path/to/results.csv', dir='', segment=False):
     # Plot training results.csv. Usage: from utils.plots import *; plot_results('path/to/results.csv')
+    import pandas as pd
     save_dir = Path(file).parent if file else Path(dir)
     if segment:
         fig, ax = plt.subplots(2, 8, figsize=(18, 6), tight_layout=True)
