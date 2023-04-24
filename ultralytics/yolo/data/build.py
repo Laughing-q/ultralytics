@@ -38,6 +38,12 @@ class InfiniteDataLoader(dataloader.DataLoader):
         for _ in range(len(self)):
             yield next(self.iterator)
 
+    def reset(self):
+        """Reset iterator.
+        This is useful when we want to modify settings of dataset while training.
+        """
+        self.iterator = self._get_iterator()
+
 
 class _RepeatSampler:
     """
@@ -98,20 +104,17 @@ def build_dataloader(dataset, batch, workers, rank=-1, mode='train', infinite_lo
     workers = workers if mode == 'train' else workers * 2
     nw = min([os.cpu_count() // max(nd, 1), batch if batch > 1 else 0, workers])  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
-    loader = InfiniteDataLoader if infinite_loader else DataLoader  # allow attribute updates
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + RANK)
-    return loader(
-        dataset=dataset,
-        batch_size=batch,
-        shuffle=shuffle and sampler is None,
-        num_workers=nw,
-        sampler=sampler,
-        pin_memory=PIN_MEMORY,
-        collate_fn=getattr(dataset, 'collate_fn', None),
-        worker_init_fn=seed_worker,
-        persistent_workers=(nw > 0) and (loader == DataLoader),  # persist workers if using default PyTorch DataLoader
-        generator=generator), dataset
+    return InfiniteDataLoader(dataset=dataset,
+                              batch_size=batch,
+                              shuffle=shuffle and sampler is None,
+                              num_workers=nw,
+                              sampler=sampler,
+                              pin_memory=PIN_MEMORY,
+                              collate_fn=getattr(dataset, 'collate_fn', None),
+                              worker_init_fn=seed_worker,
+                              generator=generator), dataset
 
 
 # Build classification
