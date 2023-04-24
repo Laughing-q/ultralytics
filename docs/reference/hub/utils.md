@@ -1,11 +1,6 @@
-# Traces
+# Events
 ---
-:::ultralytics.hub.utils.Traces
-<br><br>
-
-# check_dataset_disk_space
----
-:::ultralytics.hub.utils.check_dataset_disk_space
+:::ultralytics.hub.utils.Events
 <br><br>
 
 # request_with_credentials
