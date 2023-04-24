@@ -86,7 +86,8 @@ def build_dataset(cfg, img_path, data_info, batch, mode="train", rect=False, str
             data=data_info)
     return dataset
 
-def build_dataloader(dataset, batch, workers, rank=-1, mode='train', close_mosaic=False):
+
+def build_dataloader(dataset, batch, workers, rank=-1, mode='train', infinite_loader=True):
     """Return an InfiniteDataLoader or DataLoader for training or validation set."""
     shuffle = mode == 'train'
     if getattr(dataset, "rect", False) and shuffle:
@@ -97,7 +98,7 @@ def build_dataloader(dataset, batch, workers, rank=-1, mode='train', close_mosai
     workers = workers if mode == 'train' else workers * 2
     nw = min([os.cpu_count() // max(nd, 1), batch if batch > 1 else 0, workers])  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
-    loader = DataLoader if close_mosaic else InfiniteDataLoader  # allow attribute updates
+    loader = InfiniteDataLoader if infinite_loader else DataLoader  # allow attribute updates
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + RANK)
     return loader(
