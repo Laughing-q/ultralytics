@@ -1,3 +1,8 @@
+---
+comments: true
+description: Learn how to train and customize your models fast with the Ultralytics YOLO 'DetectionTrainer' and 'CustomTrainer'. Read more here!
+---
+
 Both the Ultralytics YOLO command-line and python interfaces are simply a high-level abstraction on the base engine
 executors. Let's take a look at the Trainer engine.
 
@@ -80,4 +85,3 @@ To know more about Callback triggering events and entry point, checkout our [Cal
 
 There are other components that can be customized similarly like `Validators` and `Predictors`
 See Reference section for more information on these.
-

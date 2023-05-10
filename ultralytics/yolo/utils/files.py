@@ -3,6 +3,7 @@
 import contextlib
 import glob
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -48,7 +49,7 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
 
         # Method 1
         for n in range(2, 9999):
-            p = f'{path}{sep}{n}{suffix}'  # increment path
+            p = f'{path}{sep}{str(n).zfill(4)}{suffix}'  # increment path
             if not os.path.exists(p):  #
                 break
         path = Path(p)
@@ -87,3 +88,13 @@ def get_latest_run(search_dir='.'):
     """Return path to most recent 'last.pt' in /runs (i.e. to --resume from)."""
     last_list = glob.glob(f'{search_dir}/**/last*.pt', recursive=True)
     return max(last_list, key=os.path.getctime) if last_list else ''
+
+
+def make_dirs(dir='new_dir/'):
+    # Create folders
+    dir = Path(dir)
+    if dir.exists():
+        shutil.rmtree(dir)  # delete dir
+    for p in dir, dir / 'labels', dir / 'images':
+        p.mkdir(parents=True, exist_ok=True)  # make dir
+    return dir

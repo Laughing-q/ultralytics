@@ -1,3 +1,8 @@
+---
+comments: true
+description: Discover how to integrate hyperparameter tuning with Ray Tune and Ultralytics YOLOv8. Speed up the tuning process and optimize your model's performance.
+---
+
 # Hyperparameter Tuning with Ray Tune and YOLOv8
 
 Hyperparameter tuning (or hyperparameter optimization) is the process of determining the right combination of hyperparameters that maximizes model performance. It works by running multiple trials in a single training process, evaluating the performance of each trial, and selecting the best hyperparameter values based on the evaluation results.
@@ -6,7 +11,7 @@ Hyperparameter tuning (or hyperparameter optimization) is the process of determi
 
 [Ultralytics](https://ultralytics.com) YOLOv8 integrates hyperparameter tuning with Ray Tune, allowing you to easily optimize your YOLOv8 model's hyperparameters. By using Ray Tune, you can leverage advanced search algorithms, parallelism, and early stopping to speed up the tuning process and achieve better model performance.
 
-###  Ray Tune
+### Ray Tune
 
 <div align="center">
 <a href="https://docs.ray.io/en/latest/tune/index.html" target="_blank">
@@ -83,7 +88,6 @@ The following table lists the default search space parameters for hyperparameter
 | mosaic          | `tune.uniform(0.0, 1.0)`   | Mosaic augmentation probability          |
 | mixup           | `tune.uniform(0.0, 1.0)`   | Mixup augmentation probability           |
 | copy_paste      | `tune.uniform(0.0, 1.0)`   | Copy-paste augmentation probability      |
-
 
 ## Custom Search Space Example
 

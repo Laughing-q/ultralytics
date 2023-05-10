@@ -1,3 +1,7 @@
+---
+description: Explore Ultralytics neural network modules for convolution, attention, detection, pose, and classification in PyTorch.
+---
+
 # Conv
 ---
 :::ultralytics.nn.modules.Conv
@@ -136,6 +140,16 @@
 # Detect
 ---
 :::ultralytics.nn.modules.Detect
+<br><br>
+
+# MLPBlock
+---
+:::ultralytics.nn.modules.MLPBlock
+<br><br>
+
+# LayerNorm2d
+---
+:::ultralytics.nn.modules.LayerNorm2d
 <br><br>
 
 # Segment

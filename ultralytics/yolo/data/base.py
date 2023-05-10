@@ -15,7 +15,7 @@ import psutil
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from ..utils import LOCAL_RANK, LOGGER, NUM_THREADS, TQDM_BAR_FORMAT
+from ..utils import DEFAULT_CFG, LOCAL_RANK, LOGGER, NUM_THREADS, TQDM_BAR_FORMAT
 from .utils import HELP_URL, IMG_FORMATS
 
 
@@ -24,17 +24,17 @@ class BaseDataset(Dataset):
     Base dataset class for loading and processing image data.
 
     Args:
-        img_path (str): Image path.
-        imgsz (int): Target image size for resizing. Default is 640.
-        cache (bool): Cache images in memory or on disk for faster loading. Default is False.
-        augment (bool): Apply data augmentation. Default is True.
-        hyp (dict): Dictionary of hyperparameters for data augmentation. Default is None.
-        prefix (str): Prefix for file paths. Default is an empty string.
-        rect (bool): Enable rectangular training. Default is False.
-        batch_size (int): Batch size for rectangular training. Default is None.
-        stride (int): Stride for rectangular training. Default is 32.
-        pad (float): Padding for rectangular training. Default is 0.5.
-        single_cls (bool): Use a single class for all labels. Default is False.
+        img_path (str): Path to the folder containing images.
+        imgsz (int, optional): Image size. Defaults to 640.
+        cache (bool, optional): Cache images to RAM or disk during training. Defaults to False.
+        augment (bool, optional): If True, data augmentation is applied. Defaults to True.
+        hyp (dict, optional): Hyperparameters to apply data augmentation. Defaults to None.
+        prefix (str, optional): Prefix to print in log messages. Defaults to ''.
+        rect (bool, optional): If True, rectangular training is used. Defaults to False.
+        batch_size (int, optional): Size of batches. Defaults to None.
+        stride (int, optional): Stride. Defaults to 32.
+        pad (float, optional): Padding. Defaults to 0.0.
+        single_cls (bool, optional): If True, single class training is used. Defaults to False.
         classes (list): List of included classes. Default is None.
 
     Attributes:
@@ -51,7 +51,7 @@ class BaseDataset(Dataset):
                  imgsz=640,
                  cache=False,
                  augment=True,
-                 hyp=None,
+                 hyp=DEFAULT_CFG,
                  prefix='',
                  rect=False,
                  batch_size=None,
