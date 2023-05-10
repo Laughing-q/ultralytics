@@ -107,6 +107,7 @@ class BasePredictor:
         self.batch = None
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
         callbacks.add_integration_callbacks(self)
+        self.pause = True
 
     def preprocess(self, im):
         """Prepares input image before inference.
@@ -250,7 +251,7 @@ class BasePredictor:
                     s += self.write_results(i, self.results, (p, im, im0))
 
                 if self.args.show and self.plotted_img is not None:
-                    self.show(p)
+                    self.show("p")
 
                 if self.args.save and self.plotted_img is not None:
                     self.save_preds(vid_cap, i, str(self.save_dir / p.name))
@@ -300,7 +301,11 @@ class BasePredictor:
             cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
             cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
         cv2.imshow(str(p), im0)
-        cv2.waitKey(500 if self.batch[3].startswith('image') else 1)  # 1 millisecond
+        # cv2.waitKey(500 if self.batch[3].startswith('image') else 1)  # 1 millisecond
+        key = cv2.waitKey(0 if self.pause else 1)
+        self.pause = True if key == ord(' ') else False
+        if key == ord('q') or key == ord('e') or key == 27:
+            exit()
 
     def save_preds(self, vid_cap, idx, save_path):
         """Save video predictions as mp4 at specified path."""
