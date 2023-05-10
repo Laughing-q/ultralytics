@@ -31,12 +31,7 @@ class YOLODataset(BaseDataset):
     cache_version = '1.0.2'  # dataset labels *.cache version, >= 1.0.0 for YOLOv8
     rand_interp_methods = [cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_LANCZOS4]
 
-    def __init__(self,
-                 *args,
-                 data=None,
-                 use_segments=False,
-                 use_keypoints=False,
-                 **kwargs):
+    def __init__(self, *args, data=None, use_segments=False, use_keypoints=False, **kwargs):
         self.use_segments = use_segments
         self.use_keypoints = use_keypoints
         self.data = data
@@ -214,7 +209,7 @@ class ClassificationDataset(torchvision.datasets.ImageFolder):
         album_transform: Albumentations transforms, used if installed
     """
 
-    def __init__(self, root, augment, imgsz, cache=False):
+    def __init__(self, root, augment=False, imgsz=224, cache=False):
         """Initialize YOLO object with root, image size, augmentations, and cache settings"""
         super().__init__(root=root)
         self.torch_transforms = classify_transforms(imgsz)

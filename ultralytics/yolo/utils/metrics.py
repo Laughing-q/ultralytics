@@ -205,7 +205,7 @@ class FocalLoss(nn.Module):
             return loss.mean()
         elif self.reduction == 'sum':
             return loss.sum()
-        else:  # 'none'
+        else:  # 'None'
             return loss
 
 
@@ -318,7 +318,7 @@ class ConfusionMatrix:
         nc, nn = self.nc, len(names)  # number of classes, names
         sn.set(font_scale=1.0 if nc < 50 else 0.8)  # for label size
         labels = (0 < nn < 99) and (nn == nc)  # apply names to ticklabels
-        ticklabels = (names + ['background']) if labels else 'auto'
+        ticklabels = (list(names) + ['background']) if labels else 'auto'
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')  # suppress empty matrix RuntimeWarning: All-NaN slice encountered
             sn.heatmap(array,
@@ -327,15 +327,16 @@ class ConfusionMatrix:
                        annot_kws={
                            'size': 8},
                        cmap='Blues',
-                       fmt='.2f',
+                       fmt='.2f' if normalize else '.0f',
                        square=True,
                        vmin=0.0,
                        xticklabels=ticklabels,
                        yticklabels=ticklabels).set_facecolor((1, 1, 1))
+        title = 'Confusion Matrix' + ' Normalized' * normalize
         ax.set_xlabel('True')
         ax.set_ylabel('Predicted')
-        ax.set_title('Confusion Matrix')
-        fig.savefig(Path(save_dir) / 'confusion_matrix.png', dpi=250)
+        ax.set_title(title)
+        fig.savefig(Path(save_dir) / f'{title.lower().replace(" ", "_")}.png', dpi=250)
         plt.close(fig)
 
     def print(self):

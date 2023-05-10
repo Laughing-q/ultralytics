@@ -1,3 +1,8 @@
+---
+comments: true
+description: Learn how to train custom YOLOv8 models on various datasets, configure hyperparameters, and use Ultralytics' YOLO for seamless training.
+---
+
 <img width="1024" src="https://github.com/ultralytics/assets/raw/main/yolov8/banner-integrations.png">
 
 **Train mode** is used for training a YOLOv8 model on a custom dataset. In this mode, the model is trained using the
@@ -72,7 +77,6 @@ task.
 | `seed`            | `0`      | random seed for reproducibility                                             |
 | `deterministic`   | `True`   | whether to enable deterministic mode                                        |
 | `single_cls`      | `False`  | train multi-class data as single-class                                      |
-| `image_weights`   | `False`  | use weighted image selection for training                                   |
 | `rect`            | `False`  | rectangular training with each batch collated for minimum padding           |
 | `cos_lr`          | `False`  | use cosine learning rate scheduler                                          |
 | `close_mosaic`    | `0`      | (int) disable mosaic augmentation for final epochs                          |
